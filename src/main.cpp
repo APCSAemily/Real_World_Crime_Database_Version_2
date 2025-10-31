@@ -107,7 +107,7 @@ string toUpper(string s){
 
 
 int main(int argc, char* argv[]) {
-    const string filename = "crime.csv";
+    const string filename = "src/crime.csv";
     ifstream file(filename);
     if (!file.is_open()) {
         cerr << "Failed to open file: " << filename << endl;
