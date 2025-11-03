@@ -1,55 +1,38 @@
+// src/main.cpp — Boston Crime Database Analyzer
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <vector>
 #include <string>
-#include <algorithm> 
+#include <algorithm>
 #include <cctype>
-#include <locale>
-#include <cstdio>
-#include <iomanip>
 #include <map>
 #include <queue>
-#include "BinaryHeap.h"
+#include <limits>
+#include <cstdio>
 #include "Crime.h"
-#include <vector>
+#include "BinaryHeap.h"
+#include "TernaryHeap.h"
 
 using namespace std;
 
-
 string trim(const string& s) {
-    string result = s;
-    // remove leading whitespace and \r
-    result.erase(result.begin(), find_if(result.begin(), result.end(),
+    string r = s;
+    r.erase(r.begin(), find_if(r.begin(), r.end(),
         [](unsigned char ch){ return !isspace(ch) && ch != '\r'; }));
-    // remove trailing whitespace and \r
-    result.erase(find_if(result.rbegin(), result.rend(),
-        [](unsigned char ch){ return !isspace(ch) && ch != '\r'; }).base(), result.end());
-    return result;
+    r.erase(find_if(r.rbegin(), r.rend(),
+        [](unsigned char ch){ return !isspace(ch) && ch != '\r'; }).base(), r.end());
+    return r;
 }
 
-
-
-int safeStoi(const string& s){
-    try{
-        return stoi(s);
-    }catch(...){
-        return 0;
-    }
+int safeStoi(const string& s) {
+    try { return stoi(s); } catch (...) { return 0; }
 }
 
-double safeStod(const string& s){
-    try{
-        return stod(s);
-    }catch(...){
-        return 0.0;
-    }
-}
-
-Crime parseLine(const string& line){
-    Crime c; //create crime object
-    stringstream ss(line); //instantiate stringstream
-    string cell; //each of the cell is a string
+Crime parseLine(const string& line) {
+    Crime c;
+    stringstream ss(line);
+    string cell;
 
     getline(ss, c.INCIDENT_NUMBER, ',');
     getline(ss, c.OFFENSE_CODE, ',');
@@ -60,114 +43,137 @@ Crime parseLine(const string& line){
     getline(ss, c.SHOOTING, ',');
     getline(ss, c.OCCURRED_ON_DATE, ',');
 
-    getline(ss, cell, ',');
-    c.YEAR = safeStoi(cell);
-    getline(ss, cell, ',');
-    c.MONTH = safeStoi(cell);
-    // getline(ss, cell, ',');
-    // cout << "DAY_OF_WEEK raw: " << "[" << cell << "]" << endl;
-    // c.DAY_OF_WEEK = trim(cell);
-    // getline(ss, cell, ',');
-    // // cout << "HOUR raw: " << "[" << cell << "]" << endl;
-    // c.HOUR = safeStoi(trim(cell));
-    // --------DAY OF WEEK -------------
-    getline(ss, cell, ',');
-    c.DAY_OF_WEEK = trim(cell);
-// -------- TIME from OCCURRED_ON_DATE -----
+    getline(ss, cell, ','); c.YEAR = safeStoi(cell);
+    getline(ss, cell, ','); c.MONTH = safeStoi(cell);
+    getline(ss, cell, ','); c.DAY_OF_WEEK = trim(cell);
+
+    // Parse time from OCCURRED_ON_DATE
     int h = 0, m = 0;
     size_t sp = c.OCCURRED_ON_DATE.find(' ');
     if (sp != string::npos) {
-        string t = c.OCCURRED_ON_DATE.substr(sp + 1);  // "19:27:00"
+        string t = c.OCCURRED_ON_DATE.substr(sp + 1);
         size_t c1 = t.find(':');
         size_t c2 = t.find(':', c1 + 1);
         if (c1 != string::npos) {
             h = safeStoi(t.substr(0, c1));
             if (c2 != string::npos)
-            m = safeStoi(t.substr(c1 + 1, c2 - c1 - 1));        }
+                m = safeStoi(t.substr(c1 + 1, c2 - c1 - 1));
+        }
     }
     c.time = {h, m};
-// ----------------------------------------------
 
     getline(ss, c.UCR_PART, ',');
     getline(ss, c.STREET, ',');
-    getline(ss, cell, ',');
-    c.Lat = safeStod(cell);
-    getline(ss, cell, ','); 
-    c.Long = safeStod(cell);
-
-    //read rest of the line as Location
+    getline(ss, cell, ','); c.Lat = safeStoi(cell);
+    getline(ss, cell, ','); c.Long = safeStoi(cell);
     getline(ss, c.Location);
     return c;
 }
 
-string toUpper(string s){
+string toUpper(string s) {
     transform(s.begin(), s.end(), s.begin(), ::toupper);
     return s;
 }
 
-
 int main(int argc, char* argv[]) {
-    const string filename = "src/crime.csv";
-    ifstream file(filename);
-    if (!file.is_open()) {
-        cerr << "Failed to open file: " << filename << endl;
+    // Fast I/O
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    // === CLI BANNER ===
+    cout << "=======================================\n";
+    cout << "   BOSTON CRIME DATABASE ANALYZER\n";
+    cout << "=======================================\n\n";
+
+    // === PARSE COMMAND LINE ===
+    if (argc < 2) {
+        cout << "Usage: main.exe <DISTRICT> [MAX_CRIMES]\n";
+        cout << "Examples:\n";
+        cout << "  main.exe B2              → show up to 50 crimes\n";
+        cout << "  main.exe B2 10           → show top 10 from each heap\n";
+        cout << "  main.exe B2 0            → show all crimes\n";
         return 1;
     }
 
-    map<string, vector<Crime>> districtMap;
-    string filter;  // ← DECLARED HERE
+    string requested = toUpper(trim(argv[1]));
+    int maxDisplay = 50;  // default
+    if (argc >= 3) {
+        try {
+            maxDisplay = stoi(argv[2]);
+            if (maxDisplay <= 0) maxDisplay = INT_MAX;
+        } catch (...) {
+            maxDisplay = 50;
+        }
+    }
+
+    cout << "Searching for District: " << argv[1] 
+         << (argc >= 3 ? " (max " + string(argv[2]) + ")" : "") << "\n\n";
+
+    // === READ CSV — ONLY REQUESTED DISTRICT ===
+    const string filename = "crime.csv";
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cerr << "ERROR: Cannot open " << filename << "\n";
+        return 1;
+    }
+
+    vector<Crime> crimes;
     string line;
     getline(file, line);  // skip header
 
-    // READ + BUILD districtMap + EARLY FILTER
     while (getline(file, line)) {
         Crime c = parseLine(line);
         string d = trim(c.DISTRICT);
-        if (d.empty()) d = "UNKNOWN";  // ← fixed "UNKOWN"
-
-        // EARLY FILTER
-        if (!filter.empty() && toUpper(d) != filter)
-            continue;
-
-        districtMap[d].push_back(c);
+        if (d.empty()) d = "UNKNOWN";
+        if (toUpper(d) == requested) {
+            crimes.push_back(c);
+        }
     }
     file.close();
 
-    // SET FILTER FROM COMMAND LINE
-    if (argc > 1) {
-        filter = toUpper(argv[1]);
-        cout << "Filtering for District: " << argv[1] << "\n\n";
-    }
-
-    // BUILD DISTRICT PRIORITY QUEUE
-    priority_queue<string, vector<string>, greater<string>> districtPQ;
-    for (const auto& p : districtMap) {
-        if (filter.empty() || toUpper(p.first) == filter)
-            districtPQ.push(p.first);
-    }
-
-    if (districtPQ.empty()) {
-        cout << "No crimes found for district: "
-             << (argc > 1 ? argv[1] : "any") << "\n";  // ← fixed /n
+    // === NO CRIMES FOUND ===
+    if (crimes.empty()) {
+        cout << "No crimes found for district: " << argv[1] << "\n";
         return 0;
     }
 
-    // PRINT EACH DISTRICT WITH BINARY HEAP
-    while (!districtPQ.empty()) {
-        string district = districtPQ.top(); districtPQ.pop();
-        cout << "District " << district << "\n";
-        cout << "Binary heap sorted by district:\n";  // ← fixed typo
-
-        BinaryHeap heap;
-        for (const auto& c : districtMap[district])
-            heap.push(c);
-
-        while (!heap.empty()) {
-            Crime c = heap.pop();
-            cout << "  " << c.OFFENSE_DESCRIPTION << " - " << c.time.str() << "\n";
-        }
-        cout << "\n";
+    // === DISPLAY HEADER ===
+    cout << "District " << requested << " (" << crimes.size() << " total crimes)\n";
+    if (maxDisplay < crimes.size() && maxDisplay != INT_MAX) {
+        cout << "Showing top " << maxDisplay << " from each heap.\n";
+    } else {
+        cout << "Showing all crimes.\n";
     }
+    cout << string(60, '-') << "\n\n";
 
+    // === BINARY HEAP: Sorted by TIME ===
+    cout << "Binary heap (sorted by TIME):\n";
+    BinaryHeap timeHeap;
+    for (const auto& c : crimes) timeHeap.push(c);
+    
+    int count = 0;
+    while (!timeHeap.empty() && count < maxDisplay) {
+        Crime c = timeHeap.pop();
+        cout << "  " << c.time.str() << " - " << c.OFFENSE_DESCRIPTION << "\n";
+        ++count;
+    }
+    if (count == 0) cout << "  (none)\n";
+    cout << "\n";
+
+    // === TERNARY HEAP: Sorted by SEVERITY ===
+    cout << "Ternary heap (sorted by OFFENSE_CODE severity):\n";
+    TernaryHeap sevHeap;
+    for (const auto& c : crimes) sevHeap.push(c);
+    
+    count = 0;
+    while (!sevHeap.empty() && count < maxDisplay) {
+        Crime c = sevHeap.pop();
+        cout << "  [" << c.OFFENSE_CODE << "] " << c.OFFENSE_DESCRIPTION << "\n";
+        ++count;
+    }
+    if (count == 0) cout << "  (none)\n";
+    cout << "\n";
+
+    cout << "Analysis complete.\n";
     return 0;
 }
