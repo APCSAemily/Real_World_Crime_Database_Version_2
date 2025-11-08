@@ -1,11 +1,10 @@
 // src/Crime.h
-// src/Crime.h
 #pragma once
 #include <string>
+#include <cstdio>
 
 struct TimePoint {
-    int hour = 0;
-    int minute = 0;
+    int hour = 0, minute = 0;
     bool operator<(const TimePoint& o) const {
         return hour != o.hour ? hour < o.hour : minute < o.minute;
     }
@@ -17,21 +16,20 @@ struct TimePoint {
 };
 
 struct Crime {
-    std::string INCIDENT_NUMBER;
-    std::string OFFENSE_CODE;
-    std::string OFFENSE_CODE_GROUP;
-    std::string OFFENSE_DESCRIPTION;
-    std::string DISTRICT;
-    std::string REPORTING_AREA;
-    std::string SHOOTING;
-    std::string OCCURRED_ON_DATE;
-    int YEAR = 0;
-    int MONTH = 0;
-    std::string DAY_OF_WEEK;
+    std::string INCIDENT_NUMBER, OFFENSE_CODE, OFFENSE_CODE_GROUP,
+                OFFENSE_DESCRIPTION, DISTRICT, REPORTING_AREA,
+                SHOOTING, OCCURRED_ON_DATE, DAY_OF_WEEK,
+                UCR_PART, STREET, Location;
+    int YEAR = 0, MONTH = 0;
+    double Lat = 0.0, Long = 0.0;
     TimePoint time;
-    std::string UCR_PART;
-    std::string STREET;
-    double Lat = 0.0;
-    double Long = 0.0;
-    std::string Location;
+
+    // ADD THIS METHOD
+    int severity() const {
+        try {
+            return std::stoi(OFFENSE_CODE);
+        } catch (...) {
+            return 0;
+        }
+    }
 };
